@@ -1,1 +1,9 @@
 .terraform/
+i.terraform/
+*.tfstate
+*.tfstate.backup
+*.log
+__pycache__/
+terraform_bot_env/
+venv/
+
