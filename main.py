@@ -41,7 +41,6 @@ session_state = {}
 async def chat_ui(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
 
-
 @app.post("/chat")
 async def chat(request: Request):
     data = await request.json()
@@ -81,7 +80,7 @@ async def chat(request: Request):
         return {"response": get_total_regions()}
 
     elif "total instance" in user_input:
-        region = get_region_from_input(user_input) or "us-east-1"
+        region = region or "us-east-1"
         return {"response": get_total_instances(region)}
 
     elif any(kw in user_input for kw in ["create ec2", "launch instance", "spin up vm", "create vm", "start server", "create server"]):
@@ -111,7 +110,6 @@ async def chat(request: Request):
         reply = together_ai_response(user_input)
         return {"response": f"🤖 AI Assist: {reply}"}
 
-
 def together_ai_response(message: str) -> str:
     try:
         messages: list[ChatCompletionMessageParam] = [
@@ -128,7 +126,6 @@ def together_ai_response(message: str) -> str:
     except Exception as e:
         return f"⚠️ Together API error: {str(e)}"
 
-
 def get_account_details():
     try:
         sts = boto3.client("sts")
@@ -136,7 +133,6 @@ def get_account_details():
         return f"👤 **Account ID:** {identity['Account']}\n🔗 **ARN:** {identity['Arn']}"
     except Exception as e:
         return f"❌ Unable to retrieve account details: {str(e)}"
-
 
 def get_total_regions():
     regions = [
@@ -147,7 +143,6 @@ def get_total_regions():
     ]
     return "🌍 Available AWS Regions:\n\n" + "\n".join([f"• {r}" for r in regions])
 
-
 def get_total_instances(region="us-east-1"):
     try:
         ec2 = boto3.resource("ec2", region_name=region)
@@ -155,7 +150,6 @@ def get_total_instances(region="us-east-1"):
         return f"📦 You have **{len(instances)}** EC2 instance(s) in **{region}**."
     except Exception as e:
         return f"❌ Unable to fetch instances in {region}: {str(e)}"
-
 
 def create_ec2_instance(region):
     print(f"[DEBUG] EC2 creation requested in region: {region}")
@@ -197,9 +191,13 @@ def create_ec2_instance(region):
     finally:
         operation_status["in_progress"] = False
 
-
 def terminate_ec2_instance(region, instance_name):
     try:
         print(f"🔧 Terminating EC2 in region: {region}")
         operation_status["in_progress"] = True
-        operation_status["status"] =
+        operation_status["status"] = f"🤸 Looking for instances named **{instance_name}** to terminate in **{region}**..."
+
+        session = boto3.session.Session(region_name=region)
+        ec2 = session.resource("ec2")
+
+        instances = ec2.instances
