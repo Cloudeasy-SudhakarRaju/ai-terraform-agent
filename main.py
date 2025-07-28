@@ -12,7 +12,7 @@ from openai.types.chat import ChatCompletionMessageParam
 # Load environment variables
 load_dotenv()
 
-# Initialize Together.ai client (OpenAI-compatible)
+# Initialize Together.ai client
 client = OpenAI(
     api_key=os.getenv("TOGETHER_API_KEY"),
     base_url="https://api.together.xyz/v1"
@@ -20,7 +20,7 @@ client = OpenAI(
 
 app = FastAPI()
 
-# CORS setup
+# CORS settings
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -31,22 +31,34 @@ app.add_middleware(
 
 templates = Jinja2Templates(directory="templates")
 
-# Shared state
 operation_status = {
     "status": "✅ No operations in progress.",
     "in_progress": False
 }
 
-# ------------------- UI Route ------------------- #
+session_state = {}  # For session tracking (simple single-user context)
+
 @app.get("/", response_class=HTMLResponse)
 async def chat_ui(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
 
-# ------------------- Chat Route ------------------- #
 @app.post("/chat")
 async def chat(request: Request):
     data = await request.json()
     user_input = data.get("message", "").lower()
+
+    # Handle termination confirmation
+    if "awaiting_termination_confirmation" in session_state:
+        details = session_state.pop("awaiting_termination_confirmation")
+        instance_name = details.get("instance_name")
+        region = details.get("region")
+
+        if "yes" in user_input or "confirm" in user_input:
+            thread = threading.Thread(target=terminate_ec2_instance, args=(region, instance_name))
+            thread.start()
+            return {"response": f"💣 Confirmed. Terminating **{instance_name}** in **{region}**. Please wait..."}
+        else:
+            return {"response": "❎ Termination cancelled."}
 
     if "hi" in user_input or "hello" in user_input:
         return {"response": "👋 Hello! I’m **Terraform-Agent**. How can I assist you today?"}
@@ -60,21 +72,33 @@ async def chat(request: Request):
     elif "total instance" in user_input:
         return {"response": get_total_instances()}
 
-    elif "create ec2" in user_input:
+    # Launch EC2 instance
+    elif any(kw in user_input for kw in ["create ec2", "launch instance", "spin up vm", "create vm", "start server", "create server"]):
         region = get_region_from_input(user_input)
+        if not region:
+            return {"response": "🌍 Please specify the AWS region you want to launch the EC2 instance in (e.g., Mumbai, Singapore, Virginia)."}
         if operation_status["in_progress"]:
             return {"response": "⚠️ Another operation is already in progress. Please wait."}
         thread = threading.Thread(target=create_ec2_instance, args=(region,))
         thread.start()
         return {"response": f"🚀 Creating EC2 instance in **{region}**. Please wait..."}
 
-    elif "terminate ec2" in user_input or "destroy ec2" in user_input:
+    # Destroy EC2 instance with confirmation
+    elif any(kw in user_input for kw in ["terminate ec2", "destroy ec2", "remove ec2", "delete ec2", "terminate instance", "delete vm", "remove instance"]):
         region = get_region_from_input(user_input)
+        instance_name = "terraform-agent-instance"  # Default name
+
+        if not region:
+            return {"response": "🌍 Please specify the region of the EC2 instance you want to terminate (e.g., Mumbai, Singapore)."}
+
         if operation_status["in_progress"]:
             return {"response": "⚠️ Another operation is already in progress. Please wait."}
-        thread = threading.Thread(target=terminate_ec2_instance, args=(region,))
-        thread.start()
-        return {"response": f"💣 Terminating EC2 instance(s) in **{region}**. Please wait..."}
+
+        session_state["awaiting_termination_confirmation"] = {
+            "region": region,
+            "instance_name": instance_name
+        }
+        return {"response": f"⚠️ Are you sure you want to terminate **{instance_name}** in **{region}**? Reply with **yes** to confirm or **no** to cancel."}
 
     elif "status" in user_input:
         return {"response": operation_status["status"]}
@@ -83,7 +107,7 @@ async def chat(request: Request):
         reply = together_ai_response(user_input)
         return {"response": f"🤖 AI Assist: {reply}"}
 
-# ------------------- Together.ai Integration ------------------- #
+# Together.ai LLM fallback
 def together_ai_response(message: str) -> str:
     try:
         messages: list[ChatCompletionMessageParam] = [
@@ -92,7 +116,7 @@ def together_ai_response(message: str) -> str:
         ]
 
         response = client.chat.completions.create(
-            model="mistralai/Mistral-7B-Instruct-v0.1",  # You can change to "meta-llama/Llama-3-8B-Instruct"
+            model="mistralai/Mistral-7B-Instruct-v0.1",
             messages=messages,
             temperature=0.7,
             max_tokens=300
@@ -101,7 +125,7 @@ def together_ai_response(message: str) -> str:
     except Exception as e:
         return f"⚠️ Together API error: {str(e)}"
 
-# ------------------- AWS Operations ------------------- #
+# AWS: Account Info
 def get_account_details():
     try:
         sts = boto3.client("sts")
@@ -110,6 +134,7 @@ def get_account_details():
     except Exception as e:
         return f"❌ Unable to retrieve account details: {str(e)}"
 
+# AWS: Regions
 def get_total_regions():
     try:
         ec2 = boto3.client("ec2")
@@ -119,6 +144,7 @@ def get_total_regions():
     except Exception as e:
         return f"❌ Unable to fetch regions: {str(e)}"
 
+# AWS: Instances
 def get_total_instances():
     try:
         ec2 = boto3.resource("ec2", region_name="us-east-1")
@@ -127,6 +153,7 @@ def get_total_instances():
     except Exception as e:
         return f"❌ Unable to fetch instances: {str(e)}"
 
+# AWS: Create EC2
 def create_ec2_instance(region):
     try:
         operation_status["in_progress"] = True
@@ -153,44 +180,53 @@ def create_ec2_instance(region):
     finally:
         operation_status["in_progress"] = False
 
-def terminate_ec2_instance(region):
+# AWS: Terminate EC2 with name filter
+def terminate_ec2_instance(region, instance_name):
     try:
         operation_status["in_progress"] = True
-        operation_status["status"] = f"🧨 Looking for instances to terminate in {region}..."
+        operation_status["status"] = f"🧨 Looking for instances named **{instance_name}** to terminate in **{region}**..."
 
         ec2 = boto3.resource("ec2", region_name=region)
         instances = ec2.instances.filter(
             Filters=[
-                {'Name': 'tag:Name', 'Values': ['Terraform-Agent-Instance']},
+                {'Name': 'tag:Name', 'Values': [instance_name]},
                 {'Name': 'instance-state-name', 'Values': ['running', 'pending']}
             ]
         )
         to_terminate = [i.id for i in instances]
 
         if not to_terminate:
-            operation_status["status"] = "ℹ️ No matching EC2 instances found to terminate."
+            operation_status["status"] = f"ℹ️ No instance named **{instance_name}** found running in **{region}**."
             return
 
+        instance_ids = ', '.join(to_terminate)
+        operation_status["status"] = f"🛑 Destroying instance(s): **{instance_ids}** in **{region}**..."
+
         ec2.instances.filter(InstanceIds=to_terminate).terminate()
-        operation_status["status"] = f"🛑 Terminating instance(s): {', '.join(to_terminate)}..."
 
         waiter = boto3.client("ec2", region_name=region).get_waiter('instance_terminated')
         waiter.wait(InstanceIds=to_terminate)
 
-        operation_status["status"] = "✅ All matching EC2 instances terminated successfully."
+        operation_status["status"] = f"✅ Instance(s) **{instance_ids}** successfully destroyed in **{region}**."
     except Exception as e:
         operation_status["status"] = f"❌ Termination failed: {str(e)}"
     finally:
         operation_status["in_progress"] = False
 
-# ------------------- Region Helper ------------------- #
+# Region detection from input
 def get_region_from_input(user_input: str):
-    region = "us-east-1"
-    if "mumbai" in user_input or "india" in user_input:
-        region = "ap-south-1"
-    elif "singapore" in user_input:
-        region = "ap-southeast-1"
-    elif "frankfurt" in user_input:
-        region = "eu-central-1"
-    return region
+    region_map = {
+        "mumbai": "ap-south-1",
+        "india": "ap-south-1",
+        "singapore": "ap-southeast-1",
+        "frankfurt": "eu-central-1",
+        "virginia": "us-east-1",
+        "ohio": "us-east-2",
+        "oregon": "us-west-2",
+        "california": "us-west-1"
+    }
+    for keyword, region in region_map.items():
+        if keyword in user_input:
+            return region
+    return None
 
