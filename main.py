@@ -12,7 +12,6 @@ from openai.types.chat import ChatCompletionMessageParam
 # Load environment variables
 load_dotenv()
 
-# Initialize Together.ai client
 client = OpenAI(
     api_key=os.getenv("TOGETHER_API_KEY"),
     base_url="https://api.together.xyz/v1"
@@ -143,10 +142,13 @@ def get_total_instances():
 
 def create_ec2_instance(region):
     try:
+        print(f"🔧 Creating EC2 in region: {region}")
         operation_status["in_progress"] = True
         operation_status["status"] = f"🛠️ Creating EC2 instance in {region}..."
 
-        ec2 = boto3.resource("ec2", region_name=region)
+        session = boto3.session.Session(region_name=region)
+        ec2 = session.resource("ec2")
+
         instance = ec2.create_instances(
             ImageId="ami-0c02fb55956c7d316",
             MinCount=1,
@@ -169,10 +171,13 @@ def create_ec2_instance(region):
 
 def terminate_ec2_instance(region, instance_name):
     try:
+        print(f"🔧 Terminating EC2 in region: {region}")
         operation_status["in_progress"] = True
         operation_status["status"] = f"🧸 Looking for instances named **{instance_name}** to terminate in **{region}**..."
 
-        ec2 = boto3.resource("ec2", region_name=region)
+        session = boto3.session.Session(region_name=region)
+        ec2 = session.resource("ec2")
+
         instances = ec2.instances.filter(
             Filters=[
                 {'Name': 'tag:Name', 'Values': [instance_name]},
@@ -189,8 +194,8 @@ def terminate_ec2_instance(region, instance_name):
         operation_status["status"] = f"🛑 Destroying instance(s): **{instance_ids}** in **{region}**..."
 
         ec2.instances.filter(InstanceIds=to_terminate).terminate()
-        waiter = boto3.client("ec2", region_name=region).get_waiter('instance_terminated')
-        waiter.wait(InstanceIds=to_terminate)
+        ec2_client = session.client("ec2")
+        ec2_client.get_waiter('instance_terminated').wait(InstanceIds=to_terminate)
 
         operation_status["status"] = f"✅ Instance(s) **{instance_ids}** successfully destroyed in **{region}**."
     except Exception as e:
