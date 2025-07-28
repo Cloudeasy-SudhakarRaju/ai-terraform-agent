@@ -129,7 +129,7 @@
       chatLog.innerHTML += `🧑 You: ${userText}\n`;
 
       try {
-        const res = await fetch("https://terraform-agent.onrender.com/chat", {
+        const res = await fetch("https://ai-terraform-agent-production.up.railway.app/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ message: userText }),
