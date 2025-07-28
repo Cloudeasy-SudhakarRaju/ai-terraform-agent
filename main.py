@@ -19,7 +19,6 @@ client = OpenAI(
 
 app = FastAPI()
 
-# CORS settings
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -192,12 +191,14 @@ def create_ec2_instance(region):
         operation_status["in_progress"] = False
 
 def terminate_ec2_instance(region, instance_name):
+    print(f"[DEBUG] Termination requested in region: {region}")
+    if not region or not instance_name:
+        print("[ERROR] Missing region or instance name")
+        return
+
     try:
-        print(f"🔧 Terminating EC2 in region: {region}")
         operation_status["in_progress"] = True
-        operation_status["status"] = f"🤸 Looking for instances named **{instance_name}** to terminate in **{region}**..."
+        operation_status["status"] = f"🔍 Searching for instance **{instance_name}** in **{region}**..."
 
         session = boto3.session.Session(region_name=region)
-        ec2 = session.resource("ec2")
-
-        instances = ec2.instances
+        ec
