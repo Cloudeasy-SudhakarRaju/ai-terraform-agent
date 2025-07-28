@@ -144,10 +144,12 @@ def create_ec2_instance(region):
     try:
         print(f"🔧 Creating EC2 in region: {region}")
         operation_status["in_progress"] = True
-        operation_status["status"] = f"🛠️ Creating EC2 instance in {region}..."
+        operation_status["status"] = f"🚰 Creating EC2 instance in {region}..."
 
         session = boto3.session.Session(region_name=region)
         ec2 = session.resource("ec2")
+
+        print(f"🔧 Using region: {region}")
 
         instance = ec2.create_instances(
             ImageId="ami-0c02fb55956c7d316",
@@ -173,7 +175,7 @@ def terminate_ec2_instance(region, instance_name):
     try:
         print(f"🔧 Terminating EC2 in region: {region}")
         operation_status["in_progress"] = True
-        operation_status["status"] = f"🧸 Looking for instances named **{instance_name}** to terminate in **{region}**..."
+        operation_status["status"] = f"🤸 Looking for instances named **{instance_name}** to terminate in **{region}**..."
 
         session = boto3.session.Session(region_name=region)
         ec2 = session.resource("ec2")
@@ -191,7 +193,7 @@ def terminate_ec2_instance(region, instance_name):
             return
 
         instance_ids = ', '.join(to_terminate)
-        operation_status["status"] = f"🛑 Destroying instance(s): **{instance_ids}** in **{region}**..."
+        operation_status["status"] = f"🐛 Destroying instance(s): **{instance_ids}** in **{region}**..."
 
         ec2.instances.filter(InstanceIds=to_terminate).terminate()
         ec2_client = session.client("ec2")
@@ -214,6 +216,7 @@ def get_region_from_input(user_input: str):
         "oregon": "us-west-2",
         "california": "us-west-1"
     }
+
     for keyword, region in region_map.items():
         if keyword in user_input:
             return region
