@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>AI Powered Terraform Agent</title>
+  <style>
+    body {
+      display: flex;
+      margin: 0;
+      font-family: Arial, sans-serif;
+      height: 100vh;
+    }
+    .sidebar {
+      background-color: #111827;
+      color: white;
+      padding: 30px;
+      width: 350px;
+    }
+    .sidebar h1 {
+      margin-bottom: 0;
+      font-size: 24px;
+    }
+    .sidebar p {
+      font-size: 14px;
+      margin: 15px 0;
+    }
+    .sidebar .name {
+      margin-top: 50px;
+      font-weight: bold;
+      font-size: 13px;
+      color: #d1d5db;
+    }
+
+    .main {
+      flex-grow: 1;
+      padding: 20px;
+      background: #f3f4f6;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .messages {
+      flex-grow: 1;
+      overflow-y: auto;
+      margin-bottom: 20px;
+    }
+
+    .input-area {
+      display: flex;
+    }
+
+    input {
+      flex-grow: 1;
+      padding: 10px;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+    }
+
+    button {
+      padding: 10px 20px;
+      margin-left: 10px;
+      background-color: #2563eb;
+      color: white;
+      border: none;
+      border-radius: 5px;
+    }
+
+    .message {
+      margin: 5px 0;
+    }
+
+    .user {
+      text-align: right;
+      color: #111827;
+    }
+
+    .bot {
+      text-align: left;
+      color: #10b981;
+    }
+  </style>
+</head>
+<body>
+  <div class="sidebar">
+    <h1>🤖 AI Powered Terraform Agent</h1>
+    <p>This intelligent assistant can provision, terminate, and report on AWS EC2 instances, and even respond using natural language via GPT.</p>
+    <div class="name">
+      Sudhakar Raju<br>
+      <span style="font-size: 11px;">Cloud Solution Architect</span>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="messages" id="messages"></div>
+    <div class="input-area">
+      <input type="text" id="userInput" placeholder="Ask me something...">
+      <button onclick="sendMessage()">Send</button>
+    </div>
+  </div>
+
+  <script>
+    async function sendMessage() {
+      const input = document.getElementById("userInput");
+      const text = input.value.trim();
+      if (!text) return;
+
+      const messagesDiv = document.getElementById("messages");
+      messagesDiv.innerHTML += `<div class="message user">${text}</div>`;
+
+      input.value = "";
+
+      const res = await fetch("/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ message: text })
+      });
+
+      const data = await res.json();
+      messagesDiv.innerHTML += `<div class="message bot">${data.response}</div>`;
+      messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+  </script>
+</body>
+</html>
+
