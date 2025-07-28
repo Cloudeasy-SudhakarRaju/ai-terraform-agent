@@ -47,6 +47,9 @@ async def chat(request: Request):
     data = await request.json()
     user_input = data.get("message", "").lower()
 
+    region = get_region_from_input(user_input)
+    print(f"[DEBUG] Region extracted from input: {region}")
+
     if "awaiting_termination_confirmation" in session_state:
         details = session_state.pop("awaiting_termination_confirmation")
         instance_name = details["instance_name"]
@@ -82,7 +85,6 @@ async def chat(request: Request):
         return {"response": get_total_instances(region)}
 
     elif any(kw in user_input for kw in ["create ec2", "launch instance", "spin up vm", "create vm", "start server", "create server"]):
-        region = get_region_from_input(user_input)
         if not region:
             return {"response": "🌍 Please specify the AWS region you want to launch the EC2 instance in (e.g., Mumbai, Singapore)."}
         if operation_status["in_progress"]:
@@ -91,7 +93,6 @@ async def chat(request: Request):
         return {"response": f"⚠️ Do you want to launch an EC2 instance in **{region}**? Reply with **yes** to confirm or **no** to cancel."}
 
     elif any(kw in user_input for kw in ["terminate ec2", "destroy ec2", "remove ec2", "delete ec2", "terminate instance", "delete vm", "remove instance"]):
-        region = get_region_from_input(user_input)
         instance_name = "Terraform-Agent-Instance"
         if not region:
             return {"response": "🌍 Please specify the region of the EC2 instance you want to terminate (e.g., Mumbai, Singapore)."}
@@ -157,8 +158,11 @@ def get_total_instances(region="us-east-1"):
 
 
 def create_ec2_instance(region):
+    print(f"[DEBUG] EC2 creation requested in region: {region}")
+    if not region:
+        raise ValueError("Missing or invalid AWS region")
+
     try:
-        print(f"🔧 Creating EC2 in region: {region}")
         operation_status["in_progress"] = True
         operation_status["status"] = f"🚰 Creating EC2 instance in {region}..."
 
@@ -176,6 +180,7 @@ def create_ec2_instance(region):
             }]
         )[0]
 
+        print("[DEBUG] Waiting for instance to run...")
         operation_status["status"] = "⏳ Launching instance... Please wait."
         instance.wait_until_running()
         instance.reload()
@@ -185,8 +190,10 @@ def create_ec2_instance(region):
             f"🔗 Public DNS: {instance.public_dns_name or 'N/A'}\n"
             f"🔒 Private IP: {instance.private_ip_address or 'N/A'}"
         )
+        print("[DEBUG] Instance successfully launched.")
     except Exception as e:
         operation_status["status"] = f"❌ Failed to create instance: {str(e)}"
+        print(f"[ERROR] EC2 creation failed: {str(e)}")
     finally:
         operation_status["in_progress"] = False
 
@@ -195,63 +202,4 @@ def terminate_ec2_instance(region, instance_name):
     try:
         print(f"🔧 Terminating EC2 in region: {region}")
         operation_status["in_progress"] = True
-        operation_status["status"] = f"🤸 Looking for instances named **{instance_name}** to terminate in **{region}**..."
-
-        session = boto3.session.Session(region_name=region)
-        ec2 = session.resource("ec2")
-
-        instances = ec2.instances.filter(
-            Filters=[
-                {'Name': 'tag:Name', 'Values': [instance_name]},
-                {'Name': 'instance-state-name', 'Values': ['running', 'pending']}
-            ]
-        )
-        to_terminate = [i.id for i in instances]
-
-        if not to_terminate:
-            operation_status["status"] = f"ℹ️ No instance named **{instance_name}** found running in **{region}**."
-            return
-
-        instance_ids = ', '.join(to_terminate)
-        operation_status["status"] = f"🐛 Destroying instance(s): **{instance_ids}** in **{region}**..."
-
-        ec2.instances.filter(InstanceIds=to_terminate).terminate()
-        ec2_client = session.client("ec2")
-        ec2_client.get_waiter('instance_terminated').wait(InstanceIds=to_terminate)
-
-        operation_status["status"] = f"✅ Instance(s) **{instance_ids}** successfully destroyed in **{region}**."
-    except Exception as e:
-        operation_status["status"] = f"❌ Termination failed: {str(e)}"
-    finally:
-        operation_status["in_progress"] = False
-
-
-def get_region_from_input(user_input: str):
-    region_map = {
-        "mumbai": "ap-south-1",
-        "india": "ap-south-1",
-        "singapore": "ap-southeast-1",
-        "frankfurt": "eu-central-1",
-        "virginia": "us-east-1",
-        "ohio": "us-east-2",
-        "oregon": "us-west-2",
-        "california": "us-west-1"
-    }
-
-    for keyword, region in region_map.items():
-        if keyword in user_input:
-            return region
-
-    aws_regions = [
-        "ap-south-1", "eu-north-1", "eu-west-3", "eu-west-2", "eu-west-1",
-        "ap-northeast-3", "ap-northeast-2", "ap-northeast-1", "ca-central-1",
-        "sa-east-1", "ap-southeast-1", "ap-southeast-2", "eu-central-1",
-        "us-east-1", "us-east-2", "us-west-1", "us-west-2"
-    ]
-
-    for region in aws_regions:
-        if region in user_input:
-            return region
-
-    return None
-
+        operation_status["status"] =
