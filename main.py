@@ -36,7 +36,7 @@ operation_status = {
     "in_progress": False
 }
 
-session_state = {}  # For session tracking (simple single-user context)
+session_state = {}
 
 @app.get("/", response_class=HTMLResponse)
 async def chat_ui(request: Request):
@@ -47,12 +47,10 @@ async def chat(request: Request):
     data = await request.json()
     user_input = data.get("message", "").lower()
 
-    # Handle termination confirmation
     if "awaiting_termination_confirmation" in session_state:
         details = session_state.pop("awaiting_termination_confirmation")
-        instance_name = details.get("instance_name")
-        region = details.get("region")
-
+        instance_name = details["instance_name"]
+        region = details["region"]
         if "yes" in user_input or "confirm" in user_input:
             thread = threading.Thread(target=terminate_ec2_instance, args=(region, instance_name))
             thread.start()
@@ -72,28 +70,23 @@ async def chat(request: Request):
     elif "total instance" in user_input:
         return {"response": get_total_instances()}
 
-    # Launch EC2 instance
     elif any(kw in user_input for kw in ["create ec2", "launch instance", "spin up vm", "create vm", "start server", "create server"]):
         region = get_region_from_input(user_input)
         if not region:
-            return {"response": "🌍 Please specify the AWS region you want to launch the EC2 instance in (e.g., Mumbai, Singapore, Virginia)."}
+            return {"response": "🌍 Please specify the AWS region you want to launch the EC2 instance in (e.g., Mumbai, Singapore)."}
         if operation_status["in_progress"]:
             return {"response": "⚠️ Another operation is already in progress. Please wait."}
         thread = threading.Thread(target=create_ec2_instance, args=(region,))
         thread.start()
         return {"response": f"🚀 Creating EC2 instance in **{region}**. Please wait..."}
 
-    # Destroy EC2 instance with confirmation
     elif any(kw in user_input for kw in ["terminate ec2", "destroy ec2", "remove ec2", "delete ec2", "terminate instance", "delete vm", "remove instance"]):
         region = get_region_from_input(user_input)
-        instance_name = "terraform-agent-instance"  # Default name
-
+        instance_name = "Terraform-Agent-Instance"
         if not region:
             return {"response": "🌍 Please specify the region of the EC2 instance you want to terminate (e.g., Mumbai, Singapore)."}
-
         if operation_status["in_progress"]:
             return {"response": "⚠️ Another operation is already in progress. Please wait."}
-
         session_state["awaiting_termination_confirmation"] = {
             "region": region,
             "instance_name": instance_name
@@ -107,14 +100,12 @@ async def chat(request: Request):
         reply = together_ai_response(user_input)
         return {"response": f"🤖 AI Assist: {reply}"}
 
-# Together.ai LLM fallback
 def together_ai_response(message: str) -> str:
     try:
         messages: list[ChatCompletionMessageParam] = [
             {"role": "system", "content": "You are a helpful assistant for AWS & cloud operations."},
             {"role": "user", "content": message}
         ]
-
         response = client.chat.completions.create(
             model="mistralai/Mistral-7B-Instruct-v0.1",
             messages=messages,
@@ -125,7 +116,6 @@ def together_ai_response(message: str) -> str:
     except Exception as e:
         return f"⚠️ Together API error: {str(e)}"
 
-# AWS: Account Info
 def get_account_details():
     try:
         sts = boto3.client("sts")
@@ -134,17 +124,15 @@ def get_account_details():
     except Exception as e:
         return f"❌ Unable to retrieve account details: {str(e)}"
 
-# AWS: Regions
 def get_total_regions():
-    try:
-        ec2 = boto3.client("ec2")
-        regions = ec2.describe_regions()
-        names = [r['RegionName'] for r in regions['Regions']]
-        return "🌍 Available AWS Regions:\n\n" + "\n".join([f"• {name}" for name in names])
-    except Exception as e:
-        return f"❌ Unable to fetch regions: {str(e)}"
+    regions = [
+        "ap-south-1", "eu-north-1", "eu-west-3", "eu-west-2", "eu-west-1",
+        "ap-northeast-3", "ap-northeast-2", "ap-northeast-1", "ca-central-1",
+        "sa-east-1", "ap-southeast-1", "ap-southeast-2", "eu-central-1",
+        "us-east-1", "us-east-2", "us-west-1", "us-west-2"
+    ]
+    return "🌍 Available AWS Regions:\n\n" + "\n".join([f"• {r}" for r in regions])
 
-# AWS: Instances
 def get_total_instances():
     try:
         ec2 = boto3.resource("ec2", region_name="us-east-1")
@@ -153,7 +141,6 @@ def get_total_instances():
     except Exception as e:
         return f"❌ Unable to fetch instances: {str(e)}"
 
-# AWS: Create EC2
 def create_ec2_instance(region):
     try:
         operation_status["in_progress"] = True
@@ -180,11 +167,10 @@ def create_ec2_instance(region):
     finally:
         operation_status["in_progress"] = False
 
-# AWS: Terminate EC2 with name filter
 def terminate_ec2_instance(region, instance_name):
     try:
         operation_status["in_progress"] = True
-        operation_status["status"] = f"🧨 Looking for instances named **{instance_name}** to terminate in **{region}**..."
+        operation_status["status"] = f"🧸 Looking for instances named **{instance_name}** to terminate in **{region}**..."
 
         ec2 = boto3.resource("ec2", region_name=region)
         instances = ec2.instances.filter(
@@ -203,7 +189,6 @@ def terminate_ec2_instance(region, instance_name):
         operation_status["status"] = f"🛑 Destroying instance(s): **{instance_ids}** in **{region}**..."
 
         ec2.instances.filter(InstanceIds=to_terminate).terminate()
-
         waiter = boto3.client("ec2", region_name=region).get_waiter('instance_terminated')
         waiter.wait(InstanceIds=to_terminate)
 
@@ -213,7 +198,6 @@ def terminate_ec2_instance(region, instance_name):
     finally:
         operation_status["in_progress"] = False
 
-# Region detection from input
 def get_region_from_input(user_input: str):
     region_map = {
         "mumbai": "ap-south-1",
@@ -228,5 +212,16 @@ def get_region_from_input(user_input: str):
     for keyword, region in region_map.items():
         if keyword in user_input:
             return region
+
+    aws_regions = [
+        "ap-south-1", "eu-north-1", "eu-west-3", "eu-west-2", "eu-west-1",
+        "ap-northeast-3", "ap-northeast-2", "ap-northeast-1", "ca-central-1",
+        "sa-east-1", "ap-southeast-1", "ap-southeast-2", "eu-central-1",
+        "us-east-1", "us-east-2", "us-west-1", "us-west-2"
+    ]
+    for region in aws_regions:
+        if region in user_input:
+            return region
+
     return None
 
