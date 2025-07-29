@@ -109,6 +109,7 @@ async def chat(request: Request):
         reply = together_ai_response(user_input)
         return {"response": f"🤖 AI Assist: {reply}"}
 
+
 def together_ai_response(message: str) -> str:
     try:
         messages: list[ChatCompletionMessageParam] = [
@@ -125,6 +126,7 @@ def together_ai_response(message: str) -> str:
     except Exception as e:
         return f"⚠️ Together API error: {str(e)}"
 
+
 def get_account_details():
     try:
         sts = boto3.client("sts")
@@ -132,6 +134,7 @@ def get_account_details():
         return f"👤 **Account ID:** {identity['Account']}\n🔗 **ARN:** {identity['Arn']}"
     except Exception as e:
         return f"❌ Unable to retrieve account details: {str(e)}"
+
 
 def get_total_regions():
     regions = [
@@ -142,6 +145,7 @@ def get_total_regions():
     ]
     return "🌍 Available AWS Regions:\n\n" + "\n".join([f"• {r}" for r in regions])
 
+
 def get_total_instances(region="us-east-1"):
     try:
         ec2 = boto3.resource("ec2", region_name=region)
@@ -149,6 +153,7 @@ def get_total_instances(region="us-east-1"):
         return f"📦 You have **{len(instances)}** EC2 instance(s) in **{region}**."
     except Exception as e:
         return f"❌ Unable to fetch instances in {region}: {str(e)}"
+
 
 def create_ec2_instance(region):
     print(f"[DEBUG] EC2 creation requested in region: {region}")
@@ -190,6 +195,7 @@ def create_ec2_instance(region):
     finally:
         operation_status["in_progress"] = False
 
+
 def terminate_ec2_instance(region, instance_name):
     print(f"[DEBUG] Termination requested in region: {region}")
     if not region or not instance_name:
@@ -201,3 +207,54 @@ def terminate_ec2_instance(region, instance_name):
         operation_status["status"] = f"🔍 Searching for instance **{instance_name}** in **{region}**..."
 
         session = boto3.session.Session(region_name=region)
+        ec2 = session.resource("ec2")
+
+        instances = ec2.instances.filter(
+            Filters=[
+                {"Name": "tag:Name", "Values": [instance_name]},
+                {"Name": "instance-state-name", "Values": ["running", "pending"]}
+            ]
+        )
+
+        to_terminate = [i.id for i in instances]
+
+        if not to_terminate:
+            operation_status["status"] = f"ℹ️ No instance named **{instance_name}** found running in **{region}**."
+            return
+
+        operation_status["status"] = f"🛑 Terminating instance(s): {', '.join(to_terminate)} in **{region}**..."
+        ec2.instances.filter(InstanceIds=to_terminate).terminate()
+
+        session.client("ec2").get_waiter("instance_terminated").wait(InstanceIds=to_terminate)
+
+        operation_status["status"] = f"✅ Instance(s) {', '.join(to_terminate)} successfully terminated in **{region}**."
+        print("[DEBUG] Termination complete.")
+
+    except Exception as e:
+        operation_status["status"] = f"❌ Termination failed: {str(e)}"
+        print(f"[ERROR] EC2 termination failed: {str(e)}")
+
+    finally:
+        operation_status["in_progress"] = False
+
+
+def get_region_from_input(user_input: str) -> str:
+    region_keywords = {
+        "mumbai": "ap-south-1",
+        "singapore": "ap-southeast-1",
+        "sydney": "ap-southeast-2",
+        "frankfurt": "eu-central-1",
+        "london": "eu-west-2",
+        "ireland": "eu-west-1",
+        "virginia": "us-east-1",
+        "ohio": "us-east-2",
+        "california": "us-west-1",
+        "oregon": "us-west-2"
+    }
+    for keyword, code in region_keywords.items():
+        if keyword in user_input:
+            return code
+    if "ap-south-1" in user_input or "us-east-1" in user_input:
+        return user_input.strip()
+    return ""
+
