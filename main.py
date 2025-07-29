@@ -201,4 +201,3 @@ def terminate_ec2_instance(region, instance_name):
         operation_status["status"] = f"🔍 Searching for instance **{instance_name}** in **{region}**..."
 
         session = boto3.session.Session(region_name=region)
-        ec
