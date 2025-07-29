@@ -83,12 +83,16 @@ async def chat(request: Request):
         return {"response": get_total_instances(region)}
 
     elif any(kw in user_input for kw in ["create ec2", "launch instance", "spin up vm", "create vm", "start server", "create server"]):
+        region = get_region_from_input(user_input)
         if not region:
-            return {"response": "🌍 Please specify the AWS region you want to launch the EC2 instance in (e.g., Mumbai, Singapore)."}
+            return {"response": "🌍 Please specify a valid AWS region (e.g., Mumbai, ap-south-1, Virginia, us-east-1)."}
         if operation_status["in_progress"]:
             return {"response": "⚠️ Another operation is already in progress. Please wait."}
+
         session_state["awaiting_creation_confirmation"] = {"region": region}
-        return {"response": f"⚠️ Do you want to launch an EC2 instance in **{region}**? Reply with **yes** to confirm or **no** to cancel."}
+        return {
+            "response": f"⚠️ Do you want to launch an EC2 instance in **{region}**? Reply with **yes** to confirm or **no** to cancel."
+        }
 
     elif any(kw in user_input for kw in ["terminate ec2", "destroy ec2", "remove ec2", "delete ec2", "terminate instance", "delete vm", "remove instance"]):
         instance_name = "Terraform-Agent-Instance"
@@ -109,7 +113,6 @@ async def chat(request: Request):
         reply = together_ai_response(user_input)
         return {"response": f"🤖 AI Assist: {reply}"}
 
-
 def together_ai_response(message: str) -> str:
     try:
         messages: list[ChatCompletionMessageParam] = [
@@ -126,7 +129,6 @@ def together_ai_response(message: str) -> str:
     except Exception as e:
         return f"⚠️ Together API error: {str(e)}"
 
-
 def get_account_details():
     try:
         sts = boto3.client("sts")
@@ -134,7 +136,6 @@ def get_account_details():
         return f"👤 **Account ID:** {identity['Account']}\n🔗 **ARN:** {identity['Arn']}"
     except Exception as e:
         return f"❌ Unable to retrieve account details: {str(e)}"
-
 
 def get_total_regions():
     regions = [
@@ -145,7 +146,6 @@ def get_total_regions():
     ]
     return "🌍 Available AWS Regions:\n\n" + "\n".join([f"• {r}" for r in regions])
 
-
 def get_total_instances(region="us-east-1"):
     try:
         ec2 = boto3.resource("ec2", region_name=region)
@@ -153,7 +153,6 @@ def get_total_instances(region="us-east-1"):
         return f"📦 You have **{len(instances)}** EC2 instance(s) in **{region}**."
     except Exception as e:
         return f"❌ Unable to fetch instances in {region}: {str(e)}"
-
 
 def create_ec2_instance(region):
     print(f"[DEBUG] EC2 creation requested in region: {region}")
@@ -186,7 +185,7 @@ def create_ec2_instance(region):
         operation_status["status"] = (
             f"✅ EC2 Instance **{instance.id}** is running in **{region}**.\n"
             f"🔗 Public DNS: {instance.public_dns_name or 'N/A'}\n"
-            f"🔒 Private IP: {instance.private_ip_address or 'N/A'}"
+            f"🔐 Private IP: {instance.private_ip_address or 'N/A'}"
         )
         print("[DEBUG] Instance successfully launched.")
     except Exception as e:
@@ -194,7 +193,6 @@ def create_ec2_instance(region):
         print(f"[ERROR] EC2 creation failed: {str(e)}")
     finally:
         operation_status["in_progress"] = False
-
 
 def terminate_ec2_instance(region, instance_name):
     print(f"[DEBUG] Termination requested in region: {region}")
@@ -237,7 +235,6 @@ def terminate_ec2_instance(region, instance_name):
     finally:
         operation_status["in_progress"] = False
 
-
 def get_region_from_input(user_input: str) -> str:
     region_keywords = {
         "mumbai": "ap-south-1",
@@ -254,7 +251,8 @@ def get_region_from_input(user_input: str) -> str:
     for keyword, code in region_keywords.items():
         if keyword in user_input:
             return code
-    if "ap-south-1" in user_input or "us-east-1" in user_input:
-        return user_input.strip()
+    for region in region_keywords.values():
+        if region in user_input:
+            return region
     return ""
 
