@@ -34,19 +34,19 @@
     }
 
     .sidebar footer {
-      margin-top: 4rem;
-      font-size: 1.1rem;
+      margin-top: 6rem;
+      font-size: 1.4rem;
       font-weight: bold;
-      color: #cbd5e1;
+      color: #f1f5f9;
       text-align: left;
-      padding-left: 1rem;
+      line-height: 1.6;
     }
 
     .sidebar footer span {
-      display: block;
-      font-size: 1rem;
+      font-size: 1.1rem;
       font-weight: normal;
-      margin-top: 0.25rem;
+      display: block;
+      margin-top: 0.4rem;
     }
 
     .chat-container {
@@ -124,12 +124,20 @@
   <div class="chat-container">
     <div class="chat-box" id="chatLog"></div>
     <div class="chat-input">
-      <input type="text" id="userInput" placeholder="Ask me to create EC2 in Mumbai..." onkeydown="handleKey(event)" />
+      <input type="text" id="userInput" placeholder="Ask me to create EC2 in Mumbai..." />
       <button onclick="sendMessage()">Send</button>
     </div>
   </div>
 
   <script>
+    // Handle Enter key to send
+    document.getElementById("userInput").addEventListener("keydown", function(event) {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        sendMessage();
+      }
+    });
+
     async function sendMessage() {
       const input = document.getElementById("userInput");
       const chatLog = document.getElementById("chatLog");
@@ -153,13 +161,6 @@
 
       input.value = "";
       chatLog.scrollTop = chatLog.scrollHeight;
-    }
-
-    function handleKey(e) {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        sendMessage();
-      }
     }
   </script>
 </body>
