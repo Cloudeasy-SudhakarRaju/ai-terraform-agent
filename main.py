@@ -36,6 +36,18 @@ operation_status = {
 
 session_state = {}
 
+AMI_MAP = {
+    "us-east-1": "resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2",
+    "us-east-2": "resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2",
+    "us-west-2": "resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2",
+    "us-west-1": "resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2",
+    "eu-west-1": "resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2",
+    "eu-central-1": "resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2",
+    "ap-south-1": "resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2",
+    "ap-northeast-1": "resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2",
+    "ap-southeast-1": "resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2",
+}
+
 @app.get("/", response_class=HTMLResponse)
 async def chat_ui(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
@@ -83,16 +95,13 @@ async def chat(request: Request):
         return {"response": get_total_instances(region)}
 
     elif any(kw in user_input for kw in ["create ec2", "launch instance", "spin up vm", "create vm", "start server", "create server"]):
-        region = get_region_from_input(user_input)
         if not region:
             return {"response": "🌍 Please specify a valid AWS region (e.g., Mumbai, ap-south-1, Virginia, us-east-1)."}
         if operation_status["in_progress"]:
             return {"response": "⚠️ Another operation is already in progress. Please wait."}
 
         session_state["awaiting_creation_confirmation"] = {"region": region}
-        return {
-            "response": f"⚠️ Do you want to launch an EC2 instance in **{region}**? Reply with **yes** to confirm or **no** to cancel."
-        }
+        return {"response": f"⚠️ Do you want to launch an EC2 instance in **{region}**? Reply with **yes** to confirm or **no** to cancel."}
 
     elif any(kw in user_input for kw in ["terminate ec2", "destroy ec2", "remove ec2", "delete ec2", "terminate instance", "delete vm", "remove instance"]):
         instance_name = "Terraform-Agent-Instance"
@@ -100,10 +109,7 @@ async def chat(request: Request):
             return {"response": "🌍 Please specify the region of the EC2 instance you want to terminate (e.g., Mumbai, Singapore)."}
         if operation_status["in_progress"]:
             return {"response": "⚠️ Another operation is already in progress. Please wait."}
-        session_state["awaiting_termination_confirmation"] = {
-            "region": region,
-            "instance_name": instance_name
-        }
+        session_state["awaiting_termination_confirmation"] = {"region": region, "instance_name": instance_name}
         return {"response": f"⚠️ Are you sure you want to terminate **{instance_name}** in **{region}**? Reply with **yes** to confirm or **no** to cancel."}
 
     elif "status" in user_input:
@@ -155,19 +161,21 @@ def get_total_instances(region="us-east-1"):
         return f"❌ Unable to fetch instances in {region}: {str(e)}"
 
 def create_ec2_instance(region):
-    print(f"[DEBUG] EC2 creation requested in region: {region}")
-    if not region:
-        raise ValueError("Missing or invalid AWS region")
-
     try:
+        print(f"🔧 Creating EC2 in region: {region}")
         operation_status["in_progress"] = True
-        operation_status["status"] = f"🚰 Creating EC2 instance in {region}..."
+        operation_status["status"] = f"💠 Creating EC2 instance in {region}..."
 
         session = boto3.session.Session(region_name=region)
         ec2 = session.resource("ec2")
 
+        image_id = AMI_MAP.get(region)
+        if not image_id:
+            operation_status["status"] = f"❌ No AMI configured for region: {region}"
+            return
+
         instance = ec2.create_instances(
-            ImageId="ami-0c02fb55956c7d316",
+            ImageId=image_id,
             MinCount=1,
             MaxCount=1,
             InstanceType="t2.micro",
@@ -177,7 +185,6 @@ def create_ec2_instance(region):
             }]
         )[0]
 
-        print("[DEBUG] Waiting for instance to run...")
         operation_status["status"] = "⏳ Launching instance... Please wait."
         instance.wait_until_running()
         instance.reload()
@@ -187,10 +194,8 @@ def create_ec2_instance(region):
             f"🔗 Public DNS: {instance.public_dns_name or 'N/A'}\n"
             f"🔐 Private IP: {instance.private_ip_address or 'N/A'}"
         )
-        print("[DEBUG] Instance successfully launched.")
     except Exception as e:
         operation_status["status"] = f"❌ Failed to create instance: {str(e)}"
-        print(f"[ERROR] EC2 creation failed: {str(e)}")
     finally:
         operation_status["in_progress"] = False
 
