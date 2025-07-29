@@ -34,19 +34,9 @@
     }
 
     .sidebar footer {
-      margin-top: 4rem;
-      font-size: 1.1rem;
-      font-weight: bold;
+      margin-top: 2rem;
+      font-size: 0.9rem;
       color: #cbd5e1;
-      text-align: left;
-      padding-left: 1rem;
-    }
-
-    .sidebar footer span {
-      display: block;
-      font-size: 1rem;
-      font-weight: normal;
-      margin-top: 0.25rem;
     }
 
     .chat-container {
@@ -116,15 +106,15 @@
       </p>
     </div>
     <footer>
-      👨‍💻 Sudhakar Raju
-      <span>Cloud Solution Architect</span>
+      👨‍💻 <strong>Sudhakar Raju</strong><br />
+      Cloud Solution Architect
     </footer>
   </div>
 
   <div class="chat-container">
     <div class="chat-box" id="chatLog"></div>
     <div class="chat-input">
-      <input type="text" id="userInput" placeholder="Ask me to create EC2 in Mumbai..." onkeydown="handleKey(event)" />
+      <input type="text" id="userInput" placeholder="Ask me to create EC2 in Mumbai..." />
       <button onclick="sendMessage()">Send</button>
     </div>
   </div>
@@ -153,13 +143,6 @@
 
       input.value = "";
       chatLog.scrollTop = chatLog.scrollHeight;
-    }
-
-    function handleKey(e) {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        sendMessage();
-      }
     }
   </script>
 </body>
