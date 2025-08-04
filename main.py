@@ -20,6 +20,7 @@ load_dotenv()
 AZURE_ORG = os.getenv("AZURE_ORG")
 AZURE_PROJECT = os.getenv("AZURE_PROJECT")
 AZURE_PAT = os.getenv("AZURE_DEVOPS_PAT")
+AZURE_PIPELINE_NAME = os.getenv("AZURE_PIPELINE_NAME")  # ✅ Use fixed pipeline name
 TOGETHER_API_KEY = os.getenv("TOGETHER_API_KEY")
 
 # === Setup FastAPI ===
@@ -83,10 +84,12 @@ async def chat(req: Request):
         operation_status["status"] = f"🚀 Creating EC2 in {region}..."
         operation_status["in_progress"] = True
 
-        pipeline_name = find_pipeline_name_by_region(region)
-        pipeline_id = fetch_pipeline_id(AZURE_ORG, AZURE_PROJECT, pipeline_name, AZURE_PAT)
+        if not AZURE_PIPELINE_NAME:
+            return {"response": "❌ AZURE_PIPELINE_NAME not defined in .env"}
+
+        pipeline_id = fetch_pipeline_id(AZURE_ORG, AZURE_PROJECT, AZURE_PIPELINE_NAME, AZURE_PAT)
         if not pipeline_id:
-            return {"response": f"❌ Pipeline '{pipeline_name}' not found in project."}
+            return {"response": f"❌ Pipeline '{AZURE_PIPELINE_NAME}' not found in project."}
 
         status, result = await trigger_azure_pipeline(pipeline_id)
         if status in [200, 201]:
@@ -113,10 +116,6 @@ def get_region_from_input(text: str) -> str:
         if k in text or v in text:
             return v
     return ""
-
-# === Dynamic pipeline naming ===
-def find_pipeline_name_by_region(region: str) -> str:
-    return f"terraform-{region.replace('-', '')}"  # Example: terraform-apsouth1
 
 # === Update terraform.tfvars.json ===
 def update_tfvars(region: str, ami_id: str, instance_type: str):
