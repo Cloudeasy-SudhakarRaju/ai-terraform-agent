@@ -19,7 +19,6 @@ from requests.auth import HTTPBasicAuth
 load_dotenv()
 AZURE_ORG = os.getenv("AZURE_ORG")
 AZURE_PROJECT = os.getenv("AZURE_PROJECT")
-AZURE_PIPELINE_NAME = os.getenv("AZURE_PIPELINE_NAME")
 AZURE_PAT = os.getenv("AZURE_DEVOPS_PAT")
 TOGETHER_API_KEY = os.getenv("TOGETHER_API_KEY")
 
@@ -71,7 +70,7 @@ async def chat(req: Request):
     user_input = data.get("message", "").lower()
 
     region = get_region_from_input(user_input)
-    
+
     if any(kw in user_input for kw in ["create ec2", "launch instance", "spin up vm"]):
         if not region:
             return {"response": "🌍 Please specify a valid AWS region (e.g., mumbai, virginia, oregon)."}
@@ -84,9 +83,10 @@ async def chat(req: Request):
         operation_status["status"] = f"🚀 Creating EC2 in {region}..."
         operation_status["in_progress"] = True
 
-        pipeline_id = fetch_pipeline_id(AZURE_ORG, AZURE_PROJECT, AZURE_PIPELINE_NAME, AZURE_PAT)
+        pipeline_name = find_pipeline_name_by_region(region)
+        pipeline_id = fetch_pipeline_id(AZURE_ORG, AZURE_PROJECT, pipeline_name, AZURE_PAT)
         if not pipeline_id:
-            return {"response": f"❌ Pipeline '{AZURE_PIPELINE_NAME}' not found in project."}
+            return {"response": f"❌ Pipeline '{pipeline_name}' not found in project."}
 
         status, result = await trigger_azure_pipeline(pipeline_id)
         if status in [200, 201]:
@@ -113,6 +113,10 @@ def get_region_from_input(text: str) -> str:
         if k in text or v in text:
             return v
     return ""
+
+# === Dynamic pipeline naming ===
+def find_pipeline_name_by_region(region: str) -> str:
+    return f"terraform-{region.replace('-', '')}"  # Example: terraform-apsouth1
 
 # === Update terraform.tfvars.json ===
 def update_tfvars(region: str, ami_id: str, instance_type: str):
