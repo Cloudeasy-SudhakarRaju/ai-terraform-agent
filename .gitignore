@@ -7,3 +7,4 @@ __pycache__/
 terraform_bot_env/
 venv/
 
+.env
