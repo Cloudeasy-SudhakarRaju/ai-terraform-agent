@@ -1,0 +1,32 @@
+trigger:
+- main
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+- task: UsePythonVersion@0
+  inputs:
+    versionSpec: '3.x'
+
+- task: TerraformInstaller@1
+  inputs:
+    terraformVersion: '1.6.6'
+
+- script: |
+    ls -la
+    echo "✅ Repo pulled successfully"
+  displayName: 'List Files'
+
+- script: terraform init
+  displayName: 'Terraform Init'
+
+- script: terraform validate
+  displayName: 'Terraform Validate'
+
+- script: terraform plan -var-file="terraform.tfvars.json"
+  displayName: 'Terraform Plan'
+
+- script: terraform apply -auto-approve -var-file="terraform.tfvars.json"
+  displayName: 'Terraform Apply'
+
