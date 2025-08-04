@@ -31,7 +31,7 @@ app.add_middleware(
 )
 
 # === Together AI client ===
-client = OpenAI(
+openai_client = OpenAI(
     api_key=os.getenv("TOGETHER_API_KEY"),
     base_url="https://api.together.xyz/v1"
 )
@@ -158,7 +158,7 @@ def together_ai_response(message: str) -> str:
             {"role": "system", "content": "You are a helpful assistant for AWS & cloud operations."},
             {"role": "user", "content": message}
         ]
-        response = client.chat.completions.create(
+        response = openai_client.chat.completions.create(
             model="mistralai/Mistral-7B-Instruct-v0.1",
             messages=messages,
             temperature=0.7,
