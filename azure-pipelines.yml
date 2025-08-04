@@ -4,37 +4,22 @@ trigger:
 pool:
   vmImage: ubuntu-latest
 
+parameters:
+  - name: region
+    type: string
+    default: 'ap-south-1'
+
 steps:
-- task: UsePythonVersion@0
-  inputs:
-    versionSpec: '3.x'
+- checkout: self
 
 - task: TerraformInstaller@1
   inputs:
     terraformVersion: '1.6.6'
 
 - script: |
-    ls -la
-    echo "✅ Repo pulled successfully"
-  displayName: 'List Files'
-
-- script: |
-    cd terraform
+    echo "🔧 Region passed: ${{ parameters.region }}"
     terraform init
-  displayName: 'Terraform Init'
-
-- script: |
-    cd terraform
-    terraform validate
-  displayName: 'Terraform Validate'
-
-- script: |
-    cd terraform
-    terraform plan -var-file="../terraform.tfvars.json"
-  displayName: 'Terraform Plan'
-
-- script: |
-    cd terraform
-    terraform apply -auto-approve -var-file="../terraform.tfvars.json"
-  displayName: 'Terraform Apply'
+    terraform plan -var="aws_region=${{ parameters.region }}" -var-file="terraform.tfvars.json"
+    terraform apply -auto-approve -var="aws_region=${{ parameters.region }}" -var-file="terraform.tfvars.json"
+  displayName: 'Terraform Apply with Region'
 
