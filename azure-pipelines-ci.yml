@@ -1,0 +1,20 @@
+# azure-pipelines-ci.yml
+trigger:
+- main
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+steps:
+- checkout: self
+
+- task: TerraformInstaller@1
+  displayName: 'Install Terraform'
+  inputs:
+    terraformVersion: '1.6.6'
+
+- script: |
+    terraform init
+    terraform apply -auto-approve
+  displayName: 'Terraform Apply'
+
