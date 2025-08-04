@@ -18,18 +18,23 @@ steps:
     echo "✅ Repo pulled successfully"
   displayName: 'List Files'
 
-- script: terraform init
+- script: |
+    cd terraform
+    terraform init
   displayName: 'Terraform Init'
 
-- script: terraform validate
+- script: |
+    cd terraform
+    terraform validate
   displayName: 'Terraform Validate'
 
-- script: terraform plan -var-file="terraform.tfvars.json"
+- script: |
+    cd terraform
+    terraform plan -var-file="../terraform.tfvars.json"
   displayName: 'Terraform Plan'
 
-- script: terraform apply -auto-approve -var-file="terraform.tfvars.json"
+- script: |
+    cd terraform
+    terraform apply -auto-approve -var-file="../terraform.tfvars.json"
   displayName: 'Terraform Apply'
-<<<<<<< HEAD
 
-=======
->>>>>>> 2fdbbdade53f4ead6f5ab77ac5b07a06d779d292
