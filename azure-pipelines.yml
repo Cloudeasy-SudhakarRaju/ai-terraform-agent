@@ -29,4 +29,7 @@ steps:
 
 - script: terraform apply -auto-approve -var-file="terraform.tfvars.json"
   displayName: 'Terraform Apply'
+<<<<<<< HEAD
 
+=======
+>>>>>>> 2fdbbdade53f4ead6f5ab77ac5b07a06d779d292
